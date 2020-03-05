@@ -78,3 +78,78 @@ ON Address.AddressID=CustomerAddress.AddressID
 
 WHERE Address.City='London' AND ProductCategory.Name='Cranksets'
 
+-- #11
+/* THIS ONLY WORKS WHEN Shipping&Main are in the same City?
+For every customer with a 'Main Office' in Dallas show AddressLine1 of the 'Main Office' and AddressLine1 of the 'Shipping' address - if there is no shipping address leave it blank. Use one row per customer.
+*/
+
+SELECT CompanyName, 
+max(CASE WHEN a1.AddressType='Main Office' THEN AddressLine1 ELSE '' END) AS MainOffice,
+max(CASE WHEN a1.AddressType='Shipping' THEN AddressLine1 ELSE '' END) AS Shipping
+
+FROM Customer
+LEFT JOIN CustomerAddress a1
+ON Customer.CustomerID = a1.CustomerID
+JOIN Address 
+ON Address.AddressID=a1.AddressID
+
+WHERE City='Dallas'
+GROUP BY CompanyName
+
+-- #12
+/*
+For each order show the SalesOrderID and SubTotal calculated three ways:
+A) From the SalesOrderHeader
+B) Sum of OrderQty*UnitPrice
+C) Sum of OrderQty*ListPrice
+*/
+
+SELECT SalesOrderDetail.SalesOrderID, 
+       SubTotal AS 'A) Subtotal',
+       SUM(OrderQty*UnitPrice) AS 'B) UnitPrice',
+       SUM(OrderQty*ListPrice) AS 'C) ListPrice'
+
+FROM SalesOrderDetail 
+JOIN SalesOrderHeader
+ON SalesOrderDetail.SalesOrderID=SalesOrderHeader.SalesOrderID
+JOIN Product
+ON SalesOrderDetail.ProductID=Product.ProductID
+
+GROUP BY SalesOrderDetail.SalesOrderID
+
+-- #13
+/*
+Show the best selling item by value.
+*/
+
+SELECT ProductModel.name AS 'Product Model', SUM(OrderQty*UnitPrice) AS 'Value'
+
+FROM Product
+JOIN SalesOrderDetail 
+On Product.ProductID=SalesOrderDetail.ProductID
+JOIN ProductModel
+ON ProductModel.ProductModelID=Product.ProductModelID
+
+GROUP BY 1
+ORDER BY 2 DESC
+
+-- #14
+/*
+Show how many orders are in the following ranges (in $):
+    RANGE      Num Orders      Total Value
+    0-  99
+  100- 999
+ 1000-9999
+10000-
+*/
+
+SELECT 
+CASE WHEN SubTotal BETWEEN 0 AND 99 THEN '0-99'
+     WHEN SubTotal BETWEEN 100 AND 999 THEN '100-999'
+     WHEN SubTotal BETWEEN 1000 AND 9999 THEN '1000-9999'
+     WHEN SubTotal >= 10000 THEN '10000-' 
+     END AS 'RANGE', 
+COUNT(1) AS 'Num Orders',
+SUM(SubTotal)
+FROM SalesOrderHeader 
+GROUP BY 1
