@@ -80,6 +80,7 @@ WHERE Address.City='London' AND ProductCategory.Name='Cranksets'
 
 -- #11
 /* THIS ONLY WORKS WHEN Shipping&Main are in the same City?
+(this one I had trouble with) 
 For every customer with a 'Main Office' in Dallas show AddressLine1 of the 'Main Office' and AddressLine1 of the 'Shipping' address - if there is no shipping address leave it blank. Use one row per customer.
 */
 
@@ -153,3 +154,114 @@ COUNT(1) AS 'Num Orders',
 SUM(SubTotal)
 FROM SalesOrderHeader 
 GROUP BY 1
+
+-- #15
+/*
+Identify the three most important cities (to do this, same code as below, just group by City (not name). Show the break down of top level product category against city.
+*/
+
+SELECT Address.City, ProductCategory.Name, sum(OrderQty*UnitPrice) AS 'Value'
+
+FROM SalesOrderDetail 
+JOIN SalesOrderHeader 
+ON SalesOrderDetail.SalesOrderID=SalesOrderHeader.SalesOrderID
+JOIN CustomerAddress 
+ON SalesOrderHeader.CustomerID=CustomerAddress.CustomerID
+JOIN Address
+ON CustomerAddress.AddressID=Address.AddressID 
+JOIN Product 
+ON Product.ProductID=SalesOrderDetail.ProductID
+JOIN ProductCategory
+ON ProductCategory.ProductCategoryID=Product.ProductCategoryID
+
+WHERE City in ('Woolston','London','Union City')
+
+GROUP BY 1, 2
+ORDER BY 1, 2
+
+/*
+Resit Questions
+*/
+
+-- #1
+/*
+List the SalesOrderNumber for the customer 'Good Toys' 'Bike World'
+*/
+
+SELECT CompanyName, COALESCE(SalesOrderID, 'No Order') AS 'Order'
+
+FROM Customer
+LEFT JOIN SalesOrderHeader
+ON Customer.CustomerID=SalesOrderHeader.CustomerID
+
+WHERE CompanyName IN ('Good Toys', 'Bike World')
+
+-- #2
+/*
+List the ProductName and the quantity of what was ordered by 'Futuristic Bikes'
+*/
+
+SELECT Product.Name, OrderQty
+
+FROM SalesOrderDetail JOIN SalesOrderHeader
+ON SalesOrderDetail.SalesOrderID=SalesOrderHeader.SalesOrderID
+JOIN Product
+ON SalesOrderDetail.ProductID=Product.ProductID
+
+WHERE CustomerID=(SELECT CustomerID FROM Customer
+WHERE CompanyName='Futuristic Bikes')
+
+-- #3
+/*
+List the name and addresses of companies containing the word 'Bike' (upper or lower case) and companies containing 'cycle' (upper or lower case). Ensure that the 'bike's are listed before the 'cycles's.
+*/
+
+SELECT temp.CompanyName,AddressLine1,AddressLine2,City,StateProvince
+
+FROM(
+SELECT DISTINCT Customer.CustomerID, AddressID, CompanyName,
+    CASE WHEN CompanyName Like '%bike%' THEN '0' 
+         WHEN CompanyName Like '%cycle%' THEN '1' END AS 'Marker'
+FROM Customer JOIN CustomerAddress 
+ON CustomerAddress.CustomerID=Customer.CustomerID 
+WHERE CompanyName Like '%bike%' OR CompanyName Like '%cycle%'
+ORDER BY Marker) AS temp
+JOIN Address
+ON Address.AddressID=temp.AddressID
+
+-- #4
+/*
+Show the total order value for each CountryRegion. List by value with the highest first.
+(note the spelling in table of is 'CountyRegion')
+*/
+
+SELECT CountyRegion, COALESCE(SUM(SubTotal), 'No Sales') AS 'Value in Sales'
+
+FROM Address LEFT JOIN SalesOrderHeader
+ON SalesOrderHeader.BillToAddressID =Address.AddressID
+
+GROUP BY 1
+
+-- #5
+/*
+Find the best customer in each region.
+*/
+
+SELECT StateProvince, Company, total_spent
+
+FROM(
+SELECT StateProvince, 
+Customer.CompanyName AS Company, 
+sum(SubTotal) AS total_spent, 
+RANK() OVER (PARTITION BY StateProvince ORDER BY total_spent DESC) AS group_rank
+
+FROM SalesOrderHeader
+JOIN CustomerAddress
+ON CustomerAddress.CustomerID=SalesOrderHeader.CustomerID
+JOIN Address 
+ON CustomerAddress.AddressID=Address.AddressID
+JOIN Customer
+ON Customer.CustomerID=SalesOrderHeader.CustomerID
+GROUP BY 1, 2) AS t
+
+WHERE t.group_rank=1
