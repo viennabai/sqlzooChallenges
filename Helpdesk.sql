@@ -53,11 +53,41 @@ SELECT shift_date, Shift_type, First_name, Last_name
   ON Staff.Staff_code = Shift.Manager 
 ORDER BY 1,2
 
+-- #6
+/*
+List the Company name and the number of calls for those companies with more than 18 calls.
+*/
 
+SELECT Company_name, COUNT(*) AS cc
+  FROM Caller 
+  JOIN Issue 
+  ON Caller.Caller_id = Issue.Caller_id
+  JOIN Customer
+  ON Customer.company_ref = Caller.company_ref
+GROUP BY 1
+HAVING cc > 18
 
+-- #7
+/*
+Find the callers who have never made a call. Show first name and last name
+*/
 
+SELECT First_name, Last_name
+  FROM Caller
+  LEFT JOIN Issue
+  ON Caller.Caller_id = Issue.Caller_id 
+WHERE Issue.Caller_id IS NULL
 
+-- #8
+/*
+For each customer show: Company name, contact name, number of calls where the number of calls is fewer than 5
+*/
 
-
-
-
+SELECT Company_name, First_name, Last_name, COUNT(Call_ref) AS nc 
+  FROM Caller
+  LEFT JOIN Issue
+  ON Caller.Caller_id = Issue.Caller_id
+  JOIN Customer
+  ON Caller.Company_ref = Customer.Company_ref 
+GROUP BY 1
+HAVING nc<5
