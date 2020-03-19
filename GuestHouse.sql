@@ -118,5 +118,145 @@ WHERE '2016-11-21' BETWEEN booking_date AND booking_date + nights - 1
 -- #11
 /*
 Coincidence. Have two guests with the same surname ever stayed in the hotel on the evening? Show the last name and both first names. Do not include duplicates.
+
+(StartA <= EndB) and (EndA >= StartB)
+
+Proof:
+Let ConditionA Mean that DateRange A Completely After DateRange B
+_                        |---- DateRange A ------| 
+|---Date Range B -----|                           _
+(True if StartA > EndB)
+
+Let ConditionB Mean that DateRange A is Completely Before DateRange B
+|---- DateRange A -----|                       _ 
+ _                          |---Date Range B ----|
+(True if EndA < StartB)
+
+Then Overlap exists if Neither A Nor B is true -
+(If one range is neither completely after the other,
+nor completely before the other, then they must overlap.)
+
+Now one of De Morgan's laws says that:
+
+Not (A Or B) <=> Not A And Not B
+
+Which translates to: (StartA <= EndB)  and  (EndA >= StartB)
 */
+
+SELECT DISTINCT last_name, g1_first_name, g2_first_name
+  FROM(
+    SELECT g1.last_name AS last_name, g2.last_name AS dup_last_name, 
+          g1.first_name AS g1_first_name, x.booking_id AS x_id, 
+          x.booking_date AS g1_beg, x.nights AS x_nights, 
+          DATE_ADD(x.booking_date-1, INTERVAL x.nights DAY) AS g1_end,
+
+          g2.first_name AS g2_first_name, y.booking_id AS y_id, 
+          y.booking_date AS g2_beg, y.nights AS y_nights, 
+          DATE_ADD(y.booking_date-1, INTERVAL y.nights DAY) AS g2_end
+
+      FROM booking x
+      JOIN guest g1
+        ON x.guest_id = g1.id 
+      JOIN guest g2
+        ON g1.last_name = g2.last_name AND g1.first_name > g2.first_name
+      JOIN booking y
+        ON y.guest_id = g2.id
+
+      ORDER BY 1)AS t
+
+WHERE t.g1_beg<=t.g2_end AND t.g1_end>=t.g2_beg
+ORDER BY 1
+
+-- #12
+/*
+Check out per floor. The first digit of the room number indicates the floor – e.g. room 201 is on the 2nd floor. For each day of the week beginning 2016-11-14 show how many guests are checking out that day by floor number. Columns should be day (Monday, Tuesday ...), floor 1, floor 2, floor 3.
+*/
+
+SELECT DATE_ADD(booking_date, INTERVAL nights DAY) AS checkout,
+    COUNT(CASE WHEN room_no LIKE '1%' THEN 1 ELSE NULL END) AS "1st",
+    COUNT(CASE WHEN room_no LIKE '2%' THEN 1 ELSE NULL END) AS "2nd",
+    COUNT(CASE WHEN room_no LIKE '3%' THEN 1 ELSE NULL END) AS "2nd"
+
+  FROM booking
+
+  WHERE DATE_ADD(booking_date, INTERVAL nights DAY) BETWEEN '2016-11-14' AND DATE_ADD('2016-11-14', INTERVAL 6 DAY)
+  GROUP BY 1
+
+-- #13
+/*
+ Free rooms? List the rooms that are free on the day 25th Nov 2016. 
+ */
+
+SELECT room.id
+  FROM room
+  LEFT JOIN booking
+         ON room.id = booking.room_no 
+          AND '2016-11-25' BETWEEN booking_date AND 
+                          DATE_ADD(booking_date, INTERVAL (nights-1) DAY)
+  WHERE booking_date IS NULL 
+
+-- #14
+/*
+ Single room for three nights required. A customer wants a single room for three consecutive nights. 
+ Find the first available date in December 2016.
+ */
+
+WITH subquery AS( -- existing single-bed bookings in Dec 
+     SELECT room_no, booking_date, 
+            DATE_ADD(booking_date, INTERVAL (nights-1) DAY) AS last_night
+       FROM booking
+       WHERE room_type_requested='single' AND
+             DATE_ADD(booking_date, INTERVAL (nights-1) DAY)>='2016-12-1' AND 
+             booking_date <='2016-12-31'
+       ORDER BY room_no, last_night) 
+
+SELECT room_no, MIN(first_avail) AS first_avail
+FROM( 
+  
+-- check the last date the room is booked in December (available after)
+   
+SELECT room_no, MIN(first_avail) AS first_avail
+  FROM(
+      SELECT room_no, DATE_ADD(MAX(last_night), INTERVAL 1 DAY) AS first_avail
+        FROM subquery q3
+        GROUP BY 1
+        ORDER BY 2) AS t2
+
+UNION 
+
+-- check if any 3-day exist in between reservations 
+
+SELECT room_no, DATE_ADD(MIN(end2), INTERVAL 1 DAY) AS first_avail
+  FROM(
+      SELECT q1.booking_date AS beg1, q1.room_no, q1.last_night AS end1, 
+             q2.booking_date AS beg2, q2.last_night AS end2
+        FROM subquery q1
+        JOIN subquery q2 
+          ON q1.room_no = q2.room_no AND q2.booking_date > q1.last_night
+      GROUP BY 2,1
+      ORDER BY 2,1) AS t
+      WHERE beg2-end1 > 3) AS inner_t
+
+-- #15
+/*
+Gross income by week. Money is collected from guests when they leave. For each Thursday in November and December 2016, 
+show the total amount of money collected from the previous Friday to that day, inclusive. 
+-- solutions given is daily... 
+
+*/
+
+SELECT checkout, SUM(bill) AS daily_income
+  FROM(
+      SELECT booking.booking_id, 
+             (amount*nights + t.extra_charge) AS bill, 
+             DATE_ADD(booking_date, INTERVAL nights DAY) AS checkout
+        FROM booking
+        JOIN rate
+          ON rate.room_type = booking.room_type_requested
+        JOIN (SELECT booking_id, SUM(amount) AS extra_charge
+                FROM extra
+                GROUP BY 1) AS t
+          ON t.booking_id = booking.booking_id) AS individual
+GROUP BY checkout
+
 
